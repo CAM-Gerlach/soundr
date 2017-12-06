@@ -72,9 +72,17 @@ options(knitr.concordance = TRUE)
 @
 
 
+
+
 \chapter{Model Analysis and Verification with R}
 
-Here, we implement a new technique for diagnosing vertical motion, $\omega$, from simulated GOES sounder temperature data, and verify its effectiveness. Check out Figure~\ref{figure:intro}.
+Here, we implement a new technique for diagnosing vertical motion, $\omega$, from simulated GOES sounder temperature data, and verify its effectiveness. Further, we seek to illustrate a few of \textit{R}'s data wrangling, analysis, plotting (via \texttt{ggplot2}), and mapping (via \texttt{ggmap}) capabilities, along with some of the tens of thousands of scientific packages avalible for nearly every concievable applicaiton.
+
+
+
+\section{Introduction and Theoretical Foundation}
+
+
 
 <<intro>>=
 print("Hello, World!")
