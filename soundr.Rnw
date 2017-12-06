@@ -1,0 +1,92 @@
+\documentclass{book}
+
+% Standard imports
+\usepackage[utf8]{inputenc} % Cause UTF-8 > Everything else No, seriously.
+\usepackage[T1]{fontenc} % Slightly less crappy than to default 128 charset
+% Really should be using proper Unicode in xelatex or lualatex
+\usepackage{bookmark} % Make PDF bookmarks
+
+% Formatting control
+\usepackage{fancyhdr} % Make proper headers
+\usepackage[compact]{titlesec} % Make titles/section headers more compact
+\usepackage{lmodern} % Change kearning to be more compact, I think
+\usepackage{sfmath} % New default math font
+%\usepackage{parskip} % Unnessesary with fancier formatting
+
+% Extra features
+\usepackage{siunitx} % Make units.
+% Acclaimed replacement for the replacement of the 20-year obsolete "units"
+\usepackage{amsthm} % Build aisdes on top of, for whatever reason
+
+
+% Basic page setup and formatting to match Bitzer's
+
+% Use sans font
+\renewcommand{\familydefault}{\sfdefault}
+
+% Set margins
+\newcommand{\thispagewidth}{6.75in}
+\setlength{\topmargin}{0pt} \setlength{\topskip}{0pt}
+\setlength{\headheight}{12pt} \setlength{\headsep}{10pt}
+\setlength{\headwidth}{\thispagewidth}
+\setlength{\textheight}{9in}\setlength{\textwidth}{\thispagewidth}
+\setlength{\footskip}{15pt}
+\setlength{\hoffset}{0in}\setlength{\voffset}{0in}
+\setlength{\marginparwidth}{0.6in}
+\setlength{\oddsidemargin}{-.15in}
+\setlength{\evensidemargin}{-.15in}
+\setlength{\parindent}{0in}
+\setlength{\parskip}{20pt}
+\renewcommand{\headrulewidth}{1pt}
+
+% Define an "aside" environment, from Bitzer.
+% Note: Depends on amsthm
+\newtheoremstyle{aside_style}{10pt}{5pt}{\itshape}{}{\bfseries}{:}{\newline}{}
+\theoremstyle{aside_style}
+\newtheorem*{myaside}{Aside}
+\newenvironment{aside}
+	{\par\noindent\hrulefill\begin{myaside}}
+	{\par\noindent\hrulefill\end{myaside}}
+
+% Make our footers look like Bitzer's.
+\pagestyle{fancy} % Obligatory Iggy Azalea joke here
+\fancyfoot{}
+\fancyfoot[OR, EL]{\thepage}
+\fancyfoot[ER, OL]{\tiny{Last edited: \today}}
+
+% Web links
+\newcommand{\link}[1]{\href{#1}{\nolinkurl{#1}}}
+
+
+
+
+\begin{document}
+
+% Knitr setup
+<<setup, include=FALSE, cache=FALSE>>=
+library(knitr)
+knit_theme$set("camstandardtheme.css")
+opts_chunk$set(fig.lp = "figure:", fig.height = 4)
+options(knitr.concordance = TRUE)
+#render_listings()
+@
+
+
+\chapter{Model Analysis and Verification with R}
+
+Here, we implement a new technique for diagnosing vertical motion, $\omega$, from simulated GOES sounder temperature data, and verify its effectiveness. Check out Figure~\ref{figure:intro}.
+
+<<intro>>=
+print("Hello, World!")
+@
+
+\section{Getting Our Data} \label{getData}
+
+First, we need to retrieve the data we'll require.
+
+
+
+
+
+
+\end{document}
