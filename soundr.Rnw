@@ -19,6 +19,7 @@
 \usepackage{amsthm} % Build aisdes on top of, for whatever reason
 
 
+
 % Basic page setup and formatting to match Bitzer's
 
 % Use sans font
@@ -60,6 +61,7 @@
 
 
 
+
 \begin{document}
 
 % Knitr setup
@@ -76,22 +78,51 @@ options(knitr.concordance = TRUE)
 
 \chapter{Model Analysis and Verification with R}
 
-Here, we implement a new technique for diagnosing vertical motion, $\omega$, from simulated GOES sounder temperature data, and verify its effectiveness. Further, we seek to illustrate a few of \textit{R}'s data wrangling, analysis, plotting (via \texttt{ggplot2}), and mapping (via \texttt{ggmap}) capabilities, along with some of the tens of thousands of scientific packages avalible for nearly every concievable applicaiton.
+Here, we implement a new technique for diagnosing vertical motion, $\omega$, from simulated GOES sounder temperature data, and verify its effectiveness. Further, we seek to illustrate a few of R's data wrangling, analysis, plotting (via \texttt{ggplot2}), and mapping (via \texttt{ggmap}) capabilities, along with some of the tens of thousands of scientific packages avalible for nearly every concievable application
 
 
 
 \section{Introduction and Theoretical Foundation}
 
+Of all the hundreds of base and derived variables describing the atmopshere's current state, few (if any) are as important—and difficult—to diagnose as vertical motion. Sure, temperature may determine whether or not you bundle up, and (horizontal) winds can make a calm day blustery, but vertical motion (usually referred to as $\omega$ when pressure is the vertical coordinate, and thus measured in \si{Pa.s^{-1}}) is the key to anything actually \textit{happenin'} with the weather, whether that be clouds, rain, snow, storms, or any sort ofmeaningful  \textit{change}. Without it, the weather would be mighly boring all the time!
+
+However, even vertical motions of a few \si{cm.s^{-1}} can be significant on the large (synoptic) scales on which medium and longer range forecasting occurs, and currently, no instruments in common operational use are able to get close to that degree of precision. Accordingly, $\omega$ is typically measured indirectly, via its relationship with other properties, as expressed via the fundamental equations that govern synoptic scale motion in the atmopshere.
+
+The two main elementary approaches, commonly discussed in a typical Dynamics course, are what is termed the "kinematic method" and the "adiabatic method." The first uses the continuity equation in pressure coordinates to show that vertical motion, $\omega$, at a certain level can be related to the divergence, integrated from the surface to that level. While simple in theory, and requiring knowlege of only on the motion fields and density, it is very sensitive to small changes in the wind at various heights, well within the margin of error of most regular measurement techniques, and is therefore not particularly useful in practice.
+
+The second, and the object of our investigation today, is the adiabatic method. We begins with a form of the thermodynamic energy equation (itself derived from  the First Law of Thermodynamics),
+
+\begin{equation} \label{thermoenergyeq}
+    \frac{\partial T}{\partial t} + u \frac{\partial T}{\partial x} + v \frac{\partial T}{\partial y} - S_p \omega = \frac{J}{c_p}
+\end{equation}
+
+where $S_p$ is a coefficient reprisentatitive of the atmosphere's static stabilty
+
+\[
+S_p = - \frac{T}{\theta} \frac{\partial \theta}{\partial P}
+\]
+
+If we assume diabatic heating, $J$, is negligable relative to changes in teperature from advection and compression/expansion (thus its name), and simply solve for $\omega$, we have
+
+\begin{equation} \label{omegaeq}
+\omega = \frac{1}{S_p} \left(\frac{\partial T}{\partial t} + u \frac{\partial T}{\partial x} + v \frac{\partial T}{\partial y} \right)
+\end{equation}
+
+Conceptually, if we assume a closed system (no external heating and cooling), this equation tells that as any temperature changes at a point in 3D space ($\frac{\partial T}{\partial t}$) must be due to either temperature being advected by the prevailing wind from elsewhere (the $u \frac{\partial T}{\partial x}$ and $v \frac{\partial T}{\partial y}$ terms) or be due to cooling (heating) due to air expanding (compressing) as it rises (falls), i.e. decreases (increases) in pressure. Thus, if we subtract the change due to advection from the net change at a point, the remainder maust be due to vertical motion, proportional to it via the stability parameter $S_p$.
+
+While the horizontal winds and temperature gradients involved can be fairly easily obtained, from, e.g. semi-daily radiosonde data, and do not typically change too drastically at the synoptic scale over the course of that period, we have historically had little reliable means of determining the rate of temperature change with time in the middle and upper troposphere, without which the above equation is useless. Radiosondes are only typically released every twelve hours (and even then at a relatively small number of points), which is quite insufficient to get accurate results.
+
+Therefore, this formulation too was ambandoned, eventually to be replaced by much more complex forms under the assumptions of Quasi-Geostrophic theory, that can be more difficult to easily apply and subject to error under the assumptions on which QG theory is based; further, they are generally only calculated from model fields, resulting in further signifiant uncertainties, as no near-real time observational data source is availible that would provide the height and surface pressure tendancy data nessesary for their operational employment.
+
+However, in recent years, radiometer-based infrared sounders have begun being dployed on geostationary satalite platforms. This, then, could enable the erstwhile-elusive measurement of point temperature change over time, by collecting moderate resolution, high coverage, relatively high frequency temperature data. Presently, such data is collected hourly on a \SI{10}{km} grid by severeal of the GOES-N series satalites, which may already provide some value in this application, while higher frequency observation may be capable of increasing this even further. As a brief survey of the literature does not record a attempt to evaluate a technique of this nature, it would be valuable to examine.
+
+The end product, particularly if sounder data is collected at higher frequencies (perhaps over a smaller spatial domain), or if the new ABI instrument on the GOES-R series platforms is used, could enable near real-time graphical products diagnosing $\omega$ from observed data, providing forecasters insight on where to expect the development of clouds and precipiation. As a first step toward this possible goal, due to the unavailibilty of processed temperature data from such soundings we will instead validate the basic theoretical approach using model data, with various means of increasing realism and "fudge-level" employed to simulate the operational limitations of such sounding instruments, and the results evaluated by several means of verification. Thus, to begin!
 
 
-<<intro>>=
-print("Hello, World!")
-@
 
 \section{Getting Our Data} \label{getData}
 
 First, we need to retrieve the data we'll require.
-
 
 
 
