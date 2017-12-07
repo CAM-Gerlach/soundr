@@ -131,10 +131,11 @@ As its \SI{13}{km} resolution closely matches that of the (legacy) GOES sounder,
 Thus, we pull down the fields, times and levels needed for analysis with \texttt{rNOMADS}. First, setting our enviroment up and selecting the fields we want:
 
 <<setupdata, cache=TRUE>>=
-library(rNOMADS)
+library(rNOMADS, quietly = TRUE)
+
+# Basic setup
 DATA_DIR_PATH = "data"
 MODEL_DATA_FILENAME = "model_data_basic"
-
 
 # Constant parameters controlling data selection
 MODEL_TO_USE = "rap"
@@ -149,10 +150,12 @@ VARIABLES_NEEDED_VERTICAL = c("tmpprs")
 VARIABLES_NEEDED_EXTRA = c("tcdcclm")
 
 TIMES_NEEDED = c(0, 2)
+
 # TODO: Actually compute and round the lat-lon, or retrieve from server
 # Non-trivial (source data is on a cartesian grid, but request is in lat lon)
 DOMAIN_LON = c(0, 428)
 DOMAIN_LAT = c(0, 227)
+
 
 # Get overall url for most recent day of RAP model data
 model.urls <- GetDODSDates(MODEL_TO_USE)
@@ -169,6 +172,7 @@ get_p_indicies <- function(p.levels)
                          -1 * PRESSURE_INCREMENT_HPA)
     return(which(pressures.all %in% p.levels) - 1)
 }
+
 
 # Construct lists of the levels/variables we want to get, for mapply
 levels.combined <- c(list(NULL), lapply(get_p_indicies(PRESSURE_LEVELS_HPA),
