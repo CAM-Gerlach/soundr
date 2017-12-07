@@ -122,13 +122,72 @@ The end product, particularly if sourced from a much more accurate hyperspectral
 
 \section{Getting Our Data} \label{getData}
 
-First, we need to retrieve the model data we'll require. While normally this would require some amount of work to interface with the NCEP EMC NOMADS APIs, luckily enough due to the provenance of R, we already have such availible with \texttt{rNOMADS}, the work of the fine R-loving folks at NCAR. For our purposes, let's limit our domain for determining $\omega$ to the CONUS at the 700, 500 and \SI{300}{hPa} pressure levels, over the course of a \SI{24}{\hour} span. Aside from $\omega$ itself for verification, to solve Equation \ref{omegaeq} we'll need the temperature and $u$- and $v$-winds at each pressure level to determine the temperature gradient, advection, and temperature change over time at each point, as well as the temperatures at levels just above and below (typically, by the minimum increement of \SI{25}{hPa}) to determine how potentential temperature changes with height, needed for the stability parameter $S_p$.
+First, we need to retrieve the model data we'll require. While normally this would require some amount of work to interface with the NCEP EMC NOMADS APIs, luckily enough due to the provenance of R, we already have such availible with \texttt{rNOMADS}, the work of the fine R-loving folks at NCAR. For our purposes, let's limit our domain for determining $\omega$ to the CONUS at the 700, 500 and \SI{300}{hPa} pressure levels, over the course of a \SI{24}{\hour} span.
+
+Aside from $\omega$ itself for verification, to solve Equation \ref{omegaeq} we'll need the temperature and $u$- and $v$-winds at each pressure level to determine the temperature gradient, advection, and temperature change over time at each point, as well as the temperatures at levels just above and below (typically, by the minimum increement of \SI{25}{hPa}) to determine how potentential temperature changes with height, needed for the stability parameter $S_p$.
 
 As its \SI{13}{km} resolution closely matches that of the (legacy) GOES sounder, it is based on the widely used WRF-ARW core shared with the HRRR, and is updated with the same frequency as said sounder, the RAP model seems well suited to this application. Ideally, more frequent timesteps would be used, but unfortunatly while the HRRR produces some subhourly output, the non-surface temperature data is not currently included among the output feilds. In the future, a custom WRF run may be needed to accurately similate the needed data.
 
-Thus, we pull down the fields, times and levels needed for analysis with \textit{rNOMADS}:
+Thus, we pull down the fields, times and levels needed for analysis with \texttt{rNOMADS}:
 
+<<getdata, cache=TRUE>>=
+library(rNOMADS)
 
+# Constant parameters controlling data selection
+MODEL_TO_USE = "rap"
+
+PRESSURE_LEVELS_HPA = c(700, 500, 300)
+PRESSURE_INCREMENT_HPA = 25
+PRESSURE_MAX = 1000
+PRESSURE_MIN = 100
+
+VARIABLES_NEEDED_LEVELS = c("tmpprs", "ugrdprs", "vgrdprs", "vvelprs")
+VARIABLES_NEEDED_VERTICAL = c("tmpprs")
+VARIABLES_NEEDED_EXTRA = c("tcdcclm")
+
+TIMES_NEEDED = c(0, 2)
+# TODO: Actually compute and round the lat-lon, or retrieve from server
+# Non-trivial (source data is on a cartesian grid, but request is in lat lon)
+DOMAIN_LON = c(0, 428)
+DOMAIN_LAT = c(0, 227)
+
+# Get overall url for most recent day of RAP model data
+model.urls <- GetDODSDates(MODEL_TO_USE)
+model.url.recent <- tail(model.urls$url, 1)
+
+# Get the most recent model run
+model.runs <- GetDODSModelRuns(model.url.recent)
+model.run <- tail(model.runs$model.run, 1)
+
+# Cute little function to get the indicies of the pressure levels we want
+get_p_indicies <- function(p.levels)
+{
+    pressures.all <- seq(PRESSURE_MAX, PRESSURE_MIN,
+                         -1 * PRESSURE_INCREMENT_HPA)
+    return(which(pressures.all %in% p.levels) - 1)
+}
+
+# Actually go get the data
+levels.combined = c(list(NULL), lapply(get_p_indicies(PRESSURE_LEVELS_HPA),
+                                       function(x) {c(x, x)}),
+                    lapply(get_p_indicies(PRESSURE_LEVELS_HPA),
+                           function(x) {c(x - 1, x + 1)}))
+variables.combined = c(VARIABLES_NEEDED_EXTRA,
+                       rep(list(VARIABLES_NEEDED_LEVELS),
+                           length(PRESSURE_LEVELS_HPA)),
+                       rep(list(VARIABLES_NEEDED_VERTICAL),
+                           length(PRESSURE_LEVELS_HPA)))
+model.data.list <- mapply(DODSGrab, levels = levels.combined,
+                          variables = variables.combined,
+                          MoreArgs = list(model.url = model.url.recent,
+                                          model.run = model.run,
+                                          time = TIMES_NEEDED,
+                                          lon = DOMAIN_LON,
+                                          lat = DOMAIN_LAT,
+                                          verbose = TRUE),
+                          SIMPLIFY = FALSE)
+
+@
 
 
 
