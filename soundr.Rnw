@@ -82,13 +82,18 @@ Here, we implement a new technique for diagnosing vertical motion, $\omega$, fro
 
 
 
-\section{Introduction and Theoretical Foundation}
+\section{Introduction and Background}
+
+\subsection{Vertical Motion: The good, the bad, and up-ly}
 
 Of all the hundreds of base and derived variables describing the atmopshere's current state, few (if any) are as important—and difficult—to diagnose as vertical motion. Sure, temperature may determine whether or not you bundle up, and (horizontal) winds can make a calm day blustery, but vertical motion (usually referred to as $\omega$ when pressure is the vertical coordinate, and thus measured in \si{Pa.s^{-1}}) is the key to anything actually \textit{happenin'} with the weather, whether that be clouds, rain, snow, storms, or any sort ofmeaningful  \textit{change}. Without it, the weather would be mighly boring all the time!
 
 However, even vertical motions of a few \si{cm.s^{-1}} can be significant on the large (synoptic) scales on which medium and longer range forecasting occurs, and currently, no instruments in common operational use are able to get close to that degree of precision. Accordingly, $\omega$ is typically measured indirectly, via its relationship with other properties, as expressed via the fundamental equations that govern synoptic scale motion in the atmopshere.
 
 The two main elementary approaches, commonly discussed in a typical Dynamics course, are what is termed the "kinematic method" and the "adiabatic method." The first uses the continuity equation in pressure coordinates to show that vertical motion, $\omega$, at a certain level can be related to the divergence, integrated from the surface to that level. While simple in theory, and requiring knowlege of only on the motion fields and density, it is very sensitive to small changes in the wind at various heights, well within the margin of error of most regular measurement techniques, and is therefore not particularly useful in practice.
+
+
+\subsection{A better approach?}
 
 The second, and the object of our investigation today, is the adiabatic method. We begins with a form of the thermodynamic energy equation (itself derived from  the First Law of Thermodynamics),
 
@@ -114,6 +119,9 @@ While the horizontal winds and temperature gradients involved can be fairly easi
 
 Therefore, this formulation too was ambandoned, eventually to be replaced by much more complex forms under the assumptions of Quasi-Geostrophic theory, that can be more difficult to easily apply and subject to error under the assumptions on which QG theory is based; further, they are generally only calculated from model fields, resulting in further signifiant uncertainties, as no near-real time observational data source is availible that would provide the height and surface pressure tendancy data nessesary for their operational employment.
 
+
+\subsection{In which we finally get to the point}
+
 However, in recent years, radiometer-based infrared sounders have begun being dployed on geostationary satalite platforms. This, then, could enable the erstwhile-elusive measurement of point temperature change over time, by collecting moderate resolution, high coverage, relatively high frequency temperature data. Presently, such data is collected hourly on a \SI{10}{km} grid by severeal of the GOES-N series satalites, which may already provide some value in this application, while higher frequency observation may be capable of increasing this even further. As a brief survey of the literature does not record a attempt to evaluate a technique of this nature, it would be valuable to examine.
 
 The end product, particularly if sourced from a much more accurate hyperspectral sounder, or in the interm if the new ABI instrument on the GOES-R series platforms is used for higher observational frequency, could enable near real-time graphical products diagnosing $\omega$ from observed data, providing forecasters insight on where to expect the development of clouds and precipiation. As a first step toward this possible goal, due to the unavailibilty of processed temperature data from such soundings, we will instead validate the basic theoretical approach using model data, with various means of increasing realism and "fudge-level" employed to simulate the operational limitations of such sounding instruments, and the results evaluated by several means of verification. Thus, to begin!
@@ -122,16 +130,22 @@ The end product, particularly if sourced from a much more accurate hyperspectral
 
 \section{Getting Our Data} \label{getData}
 
+
+\subsection{Defining our domain}
+
 First, we need to retrieve the model data we'll require. While normally this would require some amount of work to interface with the NCEP EMC NOMADS APIs, luckily enough due to the provenance of R, we already have such availible with \texttt{rNOMADS}, the work of the fine R-loving folks at NCAR. For our purposes, let's limit our domain for determining $\omega$ to the CONUS at the 700, 500 and \SI{300}{hPa} pressure levels, over the course of a \SI{24}{\hour} span.
 
 Aside from $\omega$ itself for verification, to solve Equation \ref{omegaeq} we'll need the temperature and $u$- and $v$-winds at each pressure level to determine the temperature gradient, advection, and temperature change over time at each point, as well as the temperatures at levels just above and below (typically, by the minimum increement of \SI{25}{hPa}) to determine how potentential temperature changes with height, needed for the stability parameter $S_p$.
 
 As its \SI{13}{km} resolution closely matches that of the (legacy) GOES sounder, it is based on the widely used WRF-ARW core shared with the HRRR, and is updated with the same frequency as said sounder, the RAP model seems well suited to this application. Ideally, more frequent timesteps would be used, but unfortunatly while the HRRR produces some subhourly output, the non-surface temperature data is not currently included among the output feilds. In the future, a custom WRF run may be needed to accurately similate the needed data.
 
-Thus, we pull down the fields, times and levels needed for analysis with \texttt{rNOMADS}. First, setting our enviroment up and selecting the fields we want:
 
-<<setupdata, cache=TRUE>>=
-library(rNOMADS, quietly = TRUE)
+\subsection{A prelude to battle}
+
+Now that we know what we need, its time to get it. First, we set up our enviroment and select the fields we want:
+
+<<setupenvir, message=FALSE>>=
+library(rNOMADS)
 
 # Basic setup
 DATA_DIR_PATH = "data"
@@ -155,8 +169,11 @@ TIMES_NEEDED = c(0, 2)
 # Non-trivial (source data is on a cartesian grid, but request is in lat lon)
 DOMAIN_LON = c(0, 428)
 DOMAIN_LAT = c(0, 227)
+@
 
+Then, we need to grab the urls and times of the model data we need, using \texttt{rNOMADS}.
 
+<<geturls, cache=TRUE>>=
 # Get overall url for most recent day of RAP model data
 model.urls <- GetDODSDates(MODEL_TO_USE)
 model.url.recent <- tail(model.urls$url, 1)
@@ -164,8 +181,15 @@ model.url.recent <- tail(model.urls$url, 1)
 # Get the most recent model run
 model.runs <- GetDODSModelRuns(model.url.recent)
 model.run <- tail(model.runs$model.run, 1)
+@
 
-# Cute little function to get the indicies of the pressure levels we want
+
+\subsection{Getting the goods...almost}
+
+With the preliminaries done, we now need to actually get the data, but a bit more preparation is needed first. Specifically, we need something that will translate our selected pressures into numerical indicies retrieved from the list of model levels, and we want to mash all our levels and variables into two parallel lists so we can get all the data at once.
+
+<<setupdata>>=
+# Cute lil' function to get the indicies of the pressure levels we want
 get_p_indicies <- function(p.levels)
 {
     pressures.all <- seq(PRESSURE_MAX, PRESSURE_MIN,
@@ -186,7 +210,10 @@ variables.combined <- c(VARIABLES_NEEDED_EXTRA,
                             length(PRESSURE_LEVELS_HPA)))
 @
 
-Then, we actually get the data:
+
+\subsection{At long last}
+
+Finally, the moment you've all been waiting for: again using \texttt{rNOMADS}, but this time with some help from good 'ole \texttt{mapply} to get everything done in one fell swoop, without code duplication (and the associated nasty odors...)
 
 <<getdata, eval=FALSE>>=
 # Get the various data fields desired
@@ -206,14 +233,18 @@ saveRDS(model.data.list,
         file = paste0(DATA_DIR_PATH, "/", MODEL_DATA_FILENAME, ".rds"))
 @
 
-And re-load it from our serialized file:
+We save the results of our long in the tooth efforts, and reload it for future uses (so we don't overtax the poor NCEP servers)
 
-<<loaddata, include=TRUE>>=
+<<loaddata, include=TRUE, cache=TRUE>>=
 model.data.list <- readRDS(paste0(DATA_DIR_PATH, "/",
                                     MODEL_DATA_FILENAME, ".rds"))
 @
 
+Now, on to the real fun—the omega analysis!
 
+
+
+\section{Seeking Omega}
 
 
 
