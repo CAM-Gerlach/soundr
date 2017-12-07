@@ -116,13 +116,18 @@ Therefore, this formulation too was ambandoned, eventually to be replaced by muc
 
 However, in recent years, radiometer-based infrared sounders have begun being dployed on geostationary satalite platforms. This, then, could enable the erstwhile-elusive measurement of point temperature change over time, by collecting moderate resolution, high coverage, relatively high frequency temperature data. Presently, such data is collected hourly on a \SI{10}{km} grid by severeal of the GOES-N series satalites, which may already provide some value in this application, while higher frequency observation may be capable of increasing this even further. As a brief survey of the literature does not record a attempt to evaluate a technique of this nature, it would be valuable to examine.
 
-The end product, particularly if sounder data is collected at higher frequencies (perhaps over a smaller spatial domain), or if the new ABI instrument on the GOES-R series platforms is used, could enable near real-time graphical products diagnosing $\omega$ from observed data, providing forecasters insight on where to expect the development of clouds and precipiation. As a first step toward this possible goal, due to the unavailibilty of processed temperature data from such soundings we will instead validate the basic theoretical approach using model data, with various means of increasing realism and "fudge-level" employed to simulate the operational limitations of such sounding instruments, and the results evaluated by several means of verification. Thus, to begin!
+The end product, particularly if sourced from a much more accurate hyperspectral sounder, or in the interm if the new ABI instrument on the GOES-R series platforms is used for higher observational frequency, could enable near real-time graphical products diagnosing $\omega$ from observed data, providing forecasters insight on where to expect the development of clouds and precipiation. As a first step toward this possible goal, due to the unavailibilty of processed temperature data from such soundings, we will instead validate the basic theoretical approach using model data, with various means of increasing realism and "fudge-level" employed to simulate the operational limitations of such sounding instruments, and the results evaluated by several means of verification. Thus, to begin!
 
 
 
 \section{Getting Our Data} \label{getData}
 
-First, we need to retrieve the data we'll require.
+First, we need to retrieve the model data we'll require. While normally this would require some amount of work to interface with the NCEP EMC NOMADS APIs, luckily enough due to the provenance of R, we already have such availible with \texttt{rNOMADS}, the work of the fine R-loving folks at NCAR. For our purposes, let's limit our domain for determining $\omega$ to the CONUS at the 700, 500 and \SI{300}{hPa} pressure levels, over the course of a \SI{24}{\hour} span. Aside from $\omega$ itself for verification, to solve Equation \ref{omegaeq} we'll need the temperature and $u$- and $v$-winds at each pressure level to determine the temperature gradient, advection, and temperature change over time at each point, as well as the temperatures at levels just above and below (typically, by the minimum increement of \SI{25}{hPa}) to determine how potentential temperature changes with height, needed for the stability parameter $S_p$.
+
+As its \SI{13}{km} resolution closely matches that of the (legacy) GOES sounder, it is based on the widely used WRF-ARW core shared with the HRRR, and is updated with the same frequency as said sounder, the RAP model seems well suited to this application. Ideally, more frequent timesteps would be used, but unfortunatly while the HRRR produces some subhourly output, the non-surface temperature data is not currently included among the output feilds. In the future, a custom WRF run may be needed to accurately similate the needed data.
+
+Thus, we pull down the fields, times and levels needed for analysis with \textit{rNOMADS}:
+
 
 
 
