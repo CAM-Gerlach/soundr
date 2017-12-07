@@ -128,10 +128,13 @@ Aside from $\omega$ itself for verification, to solve Equation \ref{omegaeq} we'
 
 As its \SI{13}{km} resolution closely matches that of the (legacy) GOES sounder, it is based on the widely used WRF-ARW core shared with the HRRR, and is updated with the same frequency as said sounder, the RAP model seems well suited to this application. Ideally, more frequent timesteps would be used, but unfortunatly while the HRRR produces some subhourly output, the non-surface temperature data is not currently included among the output feilds. In the future, a custom WRF run may be needed to accurately similate the needed data.
 
-Thus, we pull down the fields, times and levels needed for analysis with \texttt{rNOMADS}:
+Thus, we pull down the fields, times and levels needed for analysis with \texttt{rNOMADS}. First, setting our enviroment up and selecting the fields we want:
 
-<<getdata, cache=TRUE>>=
+<<setupdata, cache=TRUE>>=
 library(rNOMADS)
+DATA_DIR_PATH = "data"
+MODEL_DATA_FILENAME = "model_data_basic"
+
 
 # Constant parameters controlling data selection
 MODEL_TO_USE = "rap"
@@ -167,16 +170,22 @@ get_p_indicies <- function(p.levels)
     return(which(pressures.all %in% p.levels) - 1)
 }
 
-# Actually go get the data
-levels.combined = c(list(NULL), lapply(get_p_indicies(PRESSURE_LEVELS_HPA),
-                                       function(x) {c(x, x)}),
-                    lapply(get_p_indicies(PRESSURE_LEVELS_HPA),
-                           function(x) {c(x - 1, x + 1)}))
-variables.combined = c(VARIABLES_NEEDED_EXTRA,
-                       rep(list(VARIABLES_NEEDED_LEVELS),
-                           length(PRESSURE_LEVELS_HPA)),
-                       rep(list(VARIABLES_NEEDED_VERTICAL),
-                           length(PRESSURE_LEVELS_HPA)))
+# Construct lists of the levels/variables we want to get, for mapply
+levels.combined <- c(list(NULL), lapply(get_p_indicies(PRESSURE_LEVELS_HPA),
+                                        function(x) {c(x, x)}),
+                     lapply(get_p_indicies(PRESSURE_LEVELS_HPA),
+                            function(x) {c(x - 1, x + 1)}))
+variables.combined <- c(VARIABLES_NEEDED_EXTRA,
+                        rep(list(VARIABLES_NEEDED_LEVELS),
+                            length(PRESSURE_LEVELS_HPA)),
+                        rep(list(VARIABLES_NEEDED_VERTICAL),
+                            length(PRESSURE_LEVELS_HPA)))
+@
+
+Then, we actually get the data:
+
+<<getdata, eval=FALSE>>=
+# Get the various data fields desired
 model.data.list <- mapply(DODSGrab, levels = levels.combined,
                           variables = variables.combined,
                           MoreArgs = list(model.url = model.url.recent,
@@ -184,10 +193,24 @@ model.data.list <- mapply(DODSGrab, levels = levels.combined,
                                           time = TIMES_NEEDED,
                                           lon = DOMAIN_LON,
                                           lat = DOMAIN_LAT,
-                                          verbose = TRUE),
+                                          verbose = FALSE),
                           SIMPLIFY = FALSE)
 
+# Serialize the downloaded data to a file for later use
+dir.create(DATA_DIR_PATH, showWarnings = FALSE, recursive = TRUE)
+saveRDS(model.data.list,
+        file = paste0(DATA_DIR_PATH, "/", MODEL_DATA_FILENAME, ".rds"))
 @
+
+And re-load it from our serialized file:
+
+<<loaddata, include=TRUE>>=
+model.data.list <- readRDS(paste0(DATA_DIR_PATH, "/",
+                                    MODEL_DATA_FILENAME, ".rds"))
+@
+
+
+
 
 
 
