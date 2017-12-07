@@ -163,7 +163,7 @@ VARIABLES_NEEDED_LEVELS = c("tmpprs", "ugrdprs", "vgrdprs", "vvelprs")
 VARIABLES_NEEDED_VERTICAL = c("tmpprs")
 VARIABLES_NEEDED_EXTRA = c("tcdcclm")
 
-TIMES_NEEDED = c(0, 2)
+TIMES_NEEDED = c(0, 1)
 
 # TODO: Actually compute and round the lat-lon, or retrieve from server
 # Non-trivial (source data is on a cartesian grid, but request is in lat lon)
@@ -203,11 +203,13 @@ levels.combined <- c(list(NULL), lapply(get_p_indicies(PRESSURE_LEVELS_HPA),
                                         function(x) {c(x, x)}),
                      lapply(get_p_indicies(PRESSURE_LEVELS_HPA),
                             function(x) {c(x - 1, x + 1)}))
-variables.combined <- c(VARIABLES_NEEDED_EXTRA,
-                        rep(list(VARIABLES_NEEDED_LEVELS),
-                            length(PRESSURE_LEVELS_HPA)),
-                        rep(list(VARIABLES_NEEDED_VERTICAL),
-                            length(PRESSURE_LEVELS_HPA)))
+vars.combined <- c(VARIABLES_NEEDED_EXTRA,
+                   rep(list(VARIABLES_NEEDED_LEVELS),
+                       length(PRESSURE_LEVELS_HPA)),
+                   rep(list(VARIABLES_NEEDED_VERTICAL),
+                       length(PRESSURE_LEVELS_HPA)))
+times.combined <- unlist(rep(lapply(TIMES_NEEDED, function(x) {list(c(x, x))}),
+                      each = length(vars.combined)), recursive = FALSE)
 @
 
 
@@ -217,14 +219,16 @@ Finally, the moment you've all been waiting for: again using \texttt{rNOMADS}, b
 
 <<getdata, eval=FALSE>>=
 # Get the various data fields desired
-model.data.list <- mapply(DODSGrab, levels = levels.combined,
-                          variables = variables.combined,
+model.data.list <- mapply(DODSGrab,
+                          levels = rep(levels.combined, length(TIMES_NEEDED)),
+                          variables = rep(vars.combined, length(TIMES_NEEDED)),
+                          time = times.combined,
                           MoreArgs = list(model.url = model.url.recent,
                                           model.run = model.run,
-                                          time = TIMES_NEEDED,
+                                          # time = TIMES_NEEDED,
                                           lon = DOMAIN_LON,
                                           lat = DOMAIN_LAT,
-                                          verbose = FALSE),
+                                          verbose = TRUE),
                           SIMPLIFY = FALSE)
 
 # Serialize the downloaded data to a file for later use
@@ -236,15 +240,25 @@ saveRDS(model.data.list,
 We save the results of our long in the tooth efforts, and reload it for future uses (so we don't overtax the poor NCEP servers)
 
 <<loaddata, include=TRUE, cache=TRUE>>=
+# (Re)-read the downloaded model data from a file
 model.data.list <- readRDS(paste0(DATA_DIR_PATH, "/",
                                     MODEL_DATA_FILENAME, ".rds"))
 @
 
-Now, on to the real fun—the omega analysis!
+Now, on to the fun part—the omega analysis!
 
 
 
 \section{Seeking Omega}
+
+So, now that we have the data we need, we need to transform it into a suitible form for processing and analysis.
+
+<<preparedata>>=
+# Transform the downloaded data into an easier to work with grid/matrix format
+model.grid.list <- lapply(model.data.list, ModelGrid,
+                          resolution = c(0.19242568576, 0.185))
+@
+
 
 
 
