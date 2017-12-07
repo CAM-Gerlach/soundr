@@ -1,3 +1,19 @@
+% Copyright (C) 2017 C.A.M. Gerlach
+%
+% This program is free software: you can redistribute it and/or modify
+%     it under the terms of the GNU General Public License as published by
+%     the Free Software Foundation, either version 3 of the License, or
+%     (at your option) any later version.
+%
+%     This program is distributed in the hope that it will be useful,
+%     but WITHOUT ANY WARRANTY; without even the implied warranty of
+%     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+%     GNU General Public License for more details.
+%
+%     You should have received a copy of the GNU General Public License
+%     along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
 \documentclass{book}
 
 % Standard imports
@@ -82,7 +98,7 @@ Here, we implement a new technique for diagnosing vertical motion, $\omega$, fro
 
 
 
-\section{Introduction and Background}
+\section{Introduction and Background} \label{intro}
 
 \subsection{Vertical Motion: The good, the bad, and up-ly}
 
@@ -180,7 +196,16 @@ model.url.recent <- tail(model.urls$url, 1)
 
 # Get the most recent model run
 model.runs <- GetDODSModelRuns(model.url.recent)
-model.run <- tail(model.runs$model.run, 1)
+
+# If you're havin' Perl problems, I feel bad for you, son...
+model.runs.fullgrid <- model.runs$model.run[grepl("(rap_[0-2][0-9]z)",
+                                                 model.runs$model.run,
+                                                 perl = TRUE)]
+# I got 99 problems but regex just solved one.
+# Got the RAP model on the CAT patrol
+# Pilots really don't like flying into those...okay, I'll stop
+
+model.run <- tail(model.runs.fullgrid, 1)
 @
 
 
@@ -237,7 +262,7 @@ saveRDS(model.data.list,
         file = paste0(DATA_DIR_PATH, "/", MODEL_DATA_FILENAME, ".rds"))
 @
 
-We save the results of our long in the tooth efforts, and reload it for future uses (so we don't overtax the poor NCEP servers)
+We save the data from our long in the tooth efforts, and reload it for future uses (so we don't overtax the poor NCEP servers)
 
 <<loaddata, include=TRUE, cache=TRUE>>=
 # (Re)-read the downloaded model data from a file
@@ -249,17 +274,64 @@ Now, on to the fun part—the omega analysis!
 
 
 
-\section{Seeking Omega}
+\section{Data Wranglin'} \label{prepareData}
 
 So, now that we have the data we need, we need to transform it into a suitible form for processing and analysis.
 
-<<preparedata>>=
+
+\subsection{Pulling teeth}
+
+First, we'll extract the model fields into a more easily worked with matrix format. For extra brownie points, since the routine we use is poorly optimized and takes a nontrivial amount of time, we'll parallize it:
+
+<<matrixdata, cache=TRUE, results="hide">>=
+# Setup
+library(parallel)
+suppressWarnings(file.remove("clusterlog.txt"))
+c1 <- makeCluster(detectCores() - 1, outfile = "clusterlog.txt")
+clusterEvalQ(c1, library(rNOMADS))
+
 # Transform the downloaded data into an easier to work with grid/matrix format
-model.grid.list <- lapply(model.data.list, ModelGrid,
+model.grid.list <- clusterApplyLB(c1, model.data.list, ModelGrid,
                           resolution = c(0.19242568576, 0.185))
 @
 
+Now, we organize what we've got by pressure level, and then by time, and finally by variable. We'll use some fancy tricks with the apply family of "meta-functions" to avoid for loops.
 
+<<orgnizedata>>=
+# Helper function to pull the relevant objects out of a list
+select_from_list <- function(match.values, list.tocheck, subitem)
+{
+    list.tocheck[which(sapply(sapply(list.tocheck, "[[", subitem),
+                              function(x, target) {any(match(x, target))},
+                              match.values))]
+}
+
+# Reorganize the grid list into a logical structure, based around each level
+model.grid.levels <- lapply(PRESSURE_LEVELS_HPA, select_from_list,
+                            list.tocheck = model.grid.list, subitem = 5)
+model.grid.levels <-
+    lapply(model.grid.levels,
+           function(x) {lapply(TIMES_NEEDED,
+                               function(t) {x[((t * 2) + 1):((t * 2) + 2)]})})
+@
+
+
+\subsection{Data, you've been framed}
+
+So, our data structure now sorta-kinda-eh makes sense for raw processing, but what if we want to visualize it in \texttt{ggplot}, or do other nice R things with it? Well, for that, we'll need data frames! Not exactly designed for n-dimensional data, but we can hack it...
+
+
+\subsection{Just a peek}
+
+Having gotten things into shape, we can, for example, view contour plots of some of these data with ggplot, as shown in Figure \ref{figure:basicplots}.
+
+<<basicplots, fig.cap="Plot of some of our RAP fields, at 500 hPa">>=
+# library(ggplot2)
+# basic_contour_plot <- ggplot()
+@
+
+
+\section{Seeking Omega} \label{processData}
 
 
 
