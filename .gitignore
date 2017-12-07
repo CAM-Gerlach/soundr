@@ -1,6 +1,7 @@
 # Figures and data dirs
 figure/
 data/
+clusterlog.txt
 
 # Final pdfs and knitted tex
 *.pdf
