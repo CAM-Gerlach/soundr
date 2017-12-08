@@ -279,6 +279,16 @@ Now, on to the fun part—the omega analysis!
 So, now that we have the data we need, we need to transform it into a suitible form for processing and analysis.
 
 
+\subsection{Nuking cavities}
+
+Looking at our actual data values (e.g. with)
+
+<<head>>=
+head(model.data.list[[1]]$values)
+@
+
+we notice
+
 \subsection{Pulling teeth}
 
 First, we'll extract the model fields into a more easily worked with matrix format. For extra brownie points, since the routine we use is poorly optimized and takes a nontrivial amount of time, we'll parallize it:
