@@ -412,18 +412,86 @@ model.df.final <-
 All done! Whew, that was quite a bit of work.
 
 
-\subsection{Just a peek}
+%\subsection{Just a peek}
 
-Having gotten things into shape, we can, for example, view contour plots of some of these data with ggplot, as shown in Figure \ref{figure:basicplots}.
+%Having gotten things into shape, we can, for example, view contour plots of some of these data with ggplot, as shown in Figure \ref{figure:basicplots}.
 
-<<basicplots, fig.cap="Plot of some of our RAP fields, at 500 hPa">>=
-# library(ggplot2)
-# basic_contour_plot <- ggplot()
-@
+%<<basicplots, fig.cap="Plot of some of our RAP fields, at 500 hPa">>=
+%# library(ggplot2)
+%# basic_contour_plot <- ggplot()
+%@
 
 
 \section{Seeking Omega} \label{processData}
 
+So, time to finish this once and for all. Now that we have our dfs, we are almost able to calculate $\omega$. However, we do need the temperature gradient, which requires some fancy footwork, including \texttt{dplyer} to sort the data for efficiency.
+
+<<tempgradient>>=
+library(dplyr)
+# E-W Temp Gradient
+model.df.sortlon <- lapply(model.df.final, arrange, latitude, longitude)
+model.df.sortlon <- lapply(model.df.sortlon,
+                           function(x) {x$xtdiff <- c(diff(x$tmpprs.y), NA)
+                           return(x)})
+
+# N-S Temp Gradient
+model.df.sortlat <- lapply(model.df.sortlon, arrange, longitude, latitude)
+model.df.sortlat <- lapply(model.df.sortlat,
+                           function(x) {x$ytdiff <- c(diff(x$tmpprs.y), NA)
+                           return(x)})
+@
+
+And at long last, I bring you...$\omega$!
+
+<<omega>>=
+# Function to calculate omega. Currently rather limited, but can be improved.
+R_d = 287 # J kg^-1 K^-1
+c_p = 1005 # J kg^-1 K^-1
+P_0 = 1e5 # Pa
+
+calc_omega <- function(df)
+{
+    stability = -1 * (1 / ((P_0 / (df$level * 100))^(R_d/c_p))) *
+        (df$temp.25.y * (P_0 / ((df$level + 25) * 100)) ^ (R_d / c_p) -
+             df[ , "temp.-25.y"] * (P_0 / ((df$level - 25) * 100)) ^ (R_d / c_p)) /
+             (50 * 100)
+    df$omega <- (1 / stability) *
+        ((df$tmpprs.y - df$tmpprs.x) / (60 * 60) +
+             df$ugrdprs.y * df$xtdiff / (13 * 1000 * 2) +
+             df$vgrdprs.y * df$ytdiff / (13 * 1000 * 2))
+    return(df)
+}
+
+model.df.omega <- lapply(model.df.sortlat, calc_omega)
+@
+
+Finally, let's plot it with ggplot:
+
+<<omegaplot, fig.cap="Our final omega plot">>=
+library(ggplot2)
+omega.plot <- ggplot(model.df.omega[[2]], aes(x = longitude, y = latitude)) +
+    geom_raster(aes(fill = omega)) +
+    scale_fill_gradient2(limits = c(-2, 2),
+                         name = "Vertical\nVelocity\n(Pa s^-1)") +
+    ylab("Latitude") + xlab("Longitude")
+    # scale_size_manual(values = seq(0, 2, 0.25),
+    #                   labels = toString(seq(0, 2, 0.25)))
+omega.plot
+@
+
+Compared with our model:
+
+<<omegaplotmodel, fig.cap="The model omega plot">>=
+omega.plot.2 <- ggplot(model.df.omega[[2]], aes(x = longitude, y = latitude)) +
+    geom_raster(aes(fill = vvelprs.y)) +
+    scale_fill_gradient2(limits = c(-2, 2),
+                         name = "Vertical\nVelocity\n(Pa s^-1)",
+                         guide = guide_colorbar(barheight = 10)) +
+    ylab("Latitude") + xlab("Longitude") +
+    scale_size_manual(values = seq(0, 2, 0.25),
+                      labels = toString(seq(0, 2, 0.25)))
+omega.plot.2
+@
 
 
 
