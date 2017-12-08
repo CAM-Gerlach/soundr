@@ -303,7 +303,7 @@ Much better, eh?
 
 First, we'll extract the model fields into a more easily worked with matrix format. For extra brownie points, since the routine we use is poorly optimized and takes a nontrivial amount of time, we'll parallize it:
 
-<<matrixdata, cache=TRUE, results="hide", cache.rebuild=TRUE>>=
+<<matrixdata, cache=TRUE, results="hide", cache.rebuild=FALSE>>=
 # Setup the compute cluster
 library(parallel)
 suppressWarnings(file.remove("clusterlog.txt"))
@@ -352,7 +352,8 @@ model_to_dataframe <- function(model)
                longitude = model$lon,
                level = model$levels,
                variable = model$variables,
-               value = model$value)
+               value = model$value,
+               stringsAsFactors = FALSE)
 }
 
 # Convert our model data to long dfs
@@ -361,7 +362,7 @@ model.df.list <- lapply(model.data.list, model_to_dataframe)
 
 However, it would be more useful for plotting and analysis if all our data was in a "wide" format, organized by level and lat-lon. Let's do it, with the help of \texttt{tidyr}.
 
-<<tidyr, cache=TRUE>>=
+<<tidyr, cache=TRUE, cache.rebuild=FALSE>>=
 library(tidyr)
 
 # Wrangle our data frames into a "wide" format
@@ -381,7 +382,34 @@ model.df.list[verticaldfs] <- lapply(model.df.list[verticaldfs], spread,
                                      sep = ".")
 @
 
+Finally, we want to join our dfs by pressure level.
 
+<<dfmerge, message=FALSE>>=
+# Get the levels and dates from each df, remove unnessesary df
+df.levels <- sapply(model.df.list, function(x) {x$level[1]})
+level.ndf <- "Level not defined"
+model.df.sublist <- model.df.list[df.levels != level.ndf]
+
+df.levels <- sapply(model.df.sublist, function(x) {x$level[1]})
+df.times <- sapply(model.df.sublist, function(x) {x$forecast.date[1]})
+
+# Join the dfs with similar levels
+model.df.levels <- lapply(unique(df.levels[df.levels != level.ndf]),
+                          function(cur.level) {
+    lapply(unique(df.times), function(cur.time) {
+        Reduce(function(...) {merge(...)},
+               model.df.sublist[(df.levels == level.ndf |
+                                     df.levels == cur.level) &
+                                    df.times == cur.time])})})
+
+# Merge the dfs by time
+model.df.final <-
+    lapply(model.df.levels,
+           function(x) {merge(x[[1]], x[[2]], by = c("latitude", "longitude",
+                                                    "run.date", "level"))})
+@
+
+All done! Whew, that was quite a bit of work.
 
 
 \subsection{Just a peek}
