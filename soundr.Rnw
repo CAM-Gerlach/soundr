@@ -284,17 +284,27 @@ So, now that we have the data we need, we need to transform it into a suitible f
 Looking at our actual data values (e.g. with)
 
 <<head>>=
-head(model.data.list[[1]]$values)
+head(model.data.list[[1]]$value)
 @
 
-we notice
+we notice we have some missing data, flagged as the max floating point values. Before we do anything else, let's take care of those, shall we?
+
+<<removena>>=
+# Nuke the NAs
+model.data.list <-
+    lapply(model.data.list, function(x) {
+        x$value[x$value > 1e3 | x$value < -1e3] <- NA; return(x)})
+@
+
+Much better, eh?
+
 
 \subsection{Pulling teeth}
 
 First, we'll extract the model fields into a more easily worked with matrix format. For extra brownie points, since the routine we use is poorly optimized and takes a nontrivial amount of time, we'll parallize it:
 
-<<matrixdata, cache=TRUE, results="hide">>=
-# Setup
+<<matrixdata, cache=TRUE, results="hide", cache.rebuild=TRUE>>=
+# Setup the compute cluster
 library(parallel)
 suppressWarnings(file.remove("clusterlog.txt"))
 c1 <- makeCluster(detectCores() - 1, outfile = "clusterlog.txt")
@@ -303,9 +313,11 @@ clusterEvalQ(c1, library(rNOMADS))
 # Transform the downloaded data into an easier to work with grid/matrix format
 model.grid.list <- clusterApplyLB(c1, model.data.list, ModelGrid,
                           resolution = c(0.19242568576, 0.185))
+
+stopCluster(c1)
 @
 
-Now, we organize what we've got by pressure level, and then by time, and finally by variable. We'll use some fancy tricks with the apply family of "meta-functions" to avoid for loops.
+Now, we can organize what we've got by pressure level, and then by time, and finally by variable. We'll use some fancy tricks with the apply family of "meta-functions" to avoid for loops.
 
 <<orgnizedata>>=
 # Helper function to pull the relevant objects out of a list
@@ -328,7 +340,48 @@ model.grid.levels <-
 
 \subsection{Data, you've been framed}
 
-So, our data structure now sorta-kinda-eh makes sense for raw processing, but what if we want to visualize it in \texttt{ggplot}, or do other nice R things with it? Well, for that, we'll need data frames! Not exactly designed for n-dimensional data, but we can hack it...
+So, our data structure now sorta-kinda-eh makes sense for raw processing, but what if we want to visualize it in \texttt{ggplot}, or do other niceR things with it? Well, for that, we'll need data frames! Not exactly designed for n-dimensional data, but we can hack it...
+
+<<dataframe>>=
+# Takes a model data object and shoves it into a long-format dataframe
+model_to_dataframe <- function(model)
+{
+    data.frame(run.date = model$model.run.date,
+               forecast.date = model$forecast.date,
+               latitude = model$lat,
+               longitude = model$lon,
+               level = model$levels,
+               variable = model$variables,
+               value = model$value)
+}
+
+# Convert our model data to long dfs
+model.df.list <- lapply(model.data.list, model_to_dataframe)
+@
+
+However, it would be more useful for plotting and analysis if all our data was in a "wide" format, organized by level and lat-lon. Let's do it, with the help of \texttt{tidyr}.
+
+<<tidyr, cache=TRUE>>=
+library(tidyr)
+
+# Wrangle our data frames into a "wide" format
+# First, squish by variable
+model.df.list <- lapply(model.df.list, spread,
+                        key = "variable", value = "value")
+
+# Then, by pressure level for multi level dfs
+verticaldfs <- sapply(model.df.list, function(x) {length(unique(x$level)) > 1})
+model.df.list[verticaldfs] <- lapply(model.df.list[verticaldfs],
+                                     function(x) {
+                                         x$temp <- x$level - median(x$level)
+                                         x$level <- median(x$level)
+                                         return(x)})
+model.df.list[verticaldfs] <- lapply(model.df.list[verticaldfs], spread,
+                                     key = "temp", value = "tmpprs",
+                                     sep = ".")
+@
+
+
 
 
 \subsection{Just a peek}
