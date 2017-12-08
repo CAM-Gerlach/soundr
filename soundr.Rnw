@@ -186,7 +186,6 @@ TIMES_NEEDED = c(0, 1)
 DOMAIN_LON = c(0, 428)
 DOMAIN_LAT = c(0, 227)
 @
-
 Then, we need to grab the urls and times of the model data we need, using \texttt{rNOMADS}.
 
 <<geturls, cache=TRUE>>=
@@ -250,7 +249,6 @@ model.data.list <- mapply(DODSGrab,
                           time = times.combined,
                           MoreArgs = list(model.url = model.url.recent,
                                           model.run = model.run,
-                                          # time = TIMES_NEEDED,
                                           lon = DOMAIN_LON,
                                           lat = DOMAIN_LAT,
                                           verbose = TRUE),
@@ -261,15 +259,12 @@ dir.create(DATA_DIR_PATH, showWarnings = FALSE, recursive = TRUE)
 saveRDS(model.data.list,
         file = paste0(DATA_DIR_PATH, "/", MODEL_DATA_FILENAME, ".rds"))
 @
-
 We save the data from our long in the tooth efforts, and reload it for future uses (so we don't overtax the poor NCEP servers)
 
 <<loaddata, include=TRUE, cache=TRUE>>=
 # (Re)-read the downloaded model data from a file
-model.data.list <- readRDS(paste0(DATA_DIR_PATH, "/",
-                                    MODEL_DATA_FILENAME, ".rds"))
+model.data.list <- readRDS(paste0(DATA_DIR_PATH, "/", MODEL_DATA_FILENAME, ".rds"))
 @
-
 Now, on to the fun part—the omega analysis!
 
 
@@ -286,7 +281,6 @@ Looking at our actual data values (e.g. with)
 <<head>>=
 head(model.data.list[[1]]$value)
 @
-
 we notice we have some missing data, flagged as the max floating point values. Before we do anything else, let's take care of those, shall we?
 
 <<removena>>=
@@ -295,7 +289,6 @@ model.data.list <-
     lapply(model.data.list, function(x) {
         x$value[x$value > 1e3 | x$value < -1e3] <- NA; return(x)})
 @
-
 Much better, eh?
 
 
@@ -316,7 +309,6 @@ model.grid.list <- clusterApplyLB(c1, model.data.list, ModelGrid,
 
 stopCluster(c1)
 @
-
 Now, we can organize what we've got by pressure level, and then by time, and finally by variable. We'll use some fancy tricks with the apply family of "meta-functions" to avoid for loops.
 
 <<orgnizedata>>=
@@ -359,14 +351,12 @@ model_to_dataframe <- function(model)
 # Convert our model data to long dfs
 model.df.list <- lapply(model.data.list, model_to_dataframe)
 @
-
 However, it would be more useful for plotting and analysis if all our data was in a "wide" format, organized by level and lat-lon. Let's do it, with the help of \texttt{tidyr}.
 
 <<tidyr, cache=TRUE, cache.rebuild=FALSE>>=
 library(tidyr)
 
-# Wrangle our data frames into a "wide" format
-# First, squish by variable
+# Wrangle our data frames into a "wide" format. First, squish by variable
 model.df.list <- lapply(model.df.list, spread,
                         key = "variable", value = "value")
 
@@ -375,16 +365,13 @@ verticaldfs <- sapply(model.df.list, function(x) {length(unique(x$level)) > 1})
 model.df.list[verticaldfs] <- lapply(model.df.list[verticaldfs],
                                      function(x) {
                                          x$temp <- x$level - median(x$level)
-                                         x$level <- median(x$level)
-                                         return(x)})
+                                         x$level <- median(x$level); return(x)})
 model.df.list[verticaldfs] <- lapply(model.df.list[verticaldfs], spread,
-                                     key = "temp", value = "tmpprs",
-                                     sep = ".")
+                                     key = "temp", value = "tmpprs", sep = ".")
 @
-
 Finally, we want to join our dfs by pressure level.
 
-<<dfmerge, message=FALSE>>=
+<<dfmerge, message=FALSE, cache=TRUE>>=
 # Get the levels and dates from each df, remove unnessesary df
 df.levels <- sapply(model.df.list, function(x) {x$level[1]})
 level.ndf <- "Level not defined"
@@ -408,7 +395,6 @@ model.df.final <-
            function(x) {merge(x[[1]], x[[2]], by = c("latitude", "longitude",
                                                     "run.date", "level"))})
 @
-
 All done! Whew, that was quite a bit of work.
 
 
@@ -426,7 +412,7 @@ All done! Whew, that was quite a bit of work.
 
 So, time to finish this once and for all. Now that we have our dfs, we are almost able to calculate $\omega$. However, we do need the temperature gradient, which requires some fancy footwork, including \texttt{dplyer} to sort the data for efficiency.
 
-<<tempgradient>>=
+<<tempgradient, message=FALSE>>=
 library(dplyr)
 # E-W Temp Gradient
 model.df.sortlon <- lapply(model.df.final, arrange, latitude, longitude)
@@ -440,7 +426,6 @@ model.df.sortlat <- lapply(model.df.sortlat,
                            function(x) {x$ytdiff <- c(diff(x$tmpprs.y), NA)
                            return(x)})
 @
-
 And at long last, I bring you...$\omega$!
 
 <<omega>>=
@@ -464,24 +449,23 @@ calc_omega <- function(df)
 
 model.df.omega <- lapply(model.df.sortlat, calc_omega)
 @
-
 Finally, let's plot it with ggplot:
 
-<<omegaplot, fig.cap="Our final omega plot">>=
+<<omegaplot, fig.cap="Our final 500 hPa omega plot">>=
 library(ggplot2)
 omega.plot <- ggplot(model.df.omega[[2]], aes(x = longitude, y = latitude)) +
     geom_raster(aes(fill = omega)) +
     scale_fill_gradient2(limits = c(-2, 2),
-                         name = "Vertical\nVelocity\n(Pa s^-1)") +
+                         name = "Vertical\nVelocity\n(Pa s^-1)",
+                         guide = guide_colorbar(barheight = 10)) +
     ylab("Latitude") + xlab("Longitude")
     # scale_size_manual(values = seq(0, 2, 0.25),
     #                   labels = toString(seq(0, 2, 0.25)))
 omega.plot
 @
-
 Compared with our model:
 
-<<omegaplotmodel, fig.cap="The model omega plot">>=
+<<omegaplotmodel, fig.cap="The model 500 hPa omega plot">>=
 omega.plot.2 <- ggplot(model.df.omega[[2]], aes(x = longitude, y = latitude)) +
     geom_raster(aes(fill = vvelprs.y)) +
     scale_fill_gradient2(limits = c(-2, 2),
@@ -492,7 +476,7 @@ omega.plot.2 <- ggplot(model.df.omega[[2]], aes(x = longitude, y = latitude)) +
                       labels = toString(seq(0, 2, 0.25)))
 omega.plot.2
 @
-
+We can observe fairly close similarities; unfortunatly, our page count is insufficient to explore them quantitatively in any detail, but alas, that is a story for another day...hopefully a soon one. I'll keep the repo updated, so stay tuned for the latest developments.
 
 
 \end{document}
